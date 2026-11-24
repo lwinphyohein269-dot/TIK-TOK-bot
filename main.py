@@ -33,8 +33,7 @@ def save_user_and_message(user_id, username, message_text):
     c = conn.cursor()
     c.execute(
         "INSERT OR IGNORE INTO users VALUES (?, ?)", (user_id, username))
-    c.execute("INSERT INTO messages (user_id, message_text) VALUES (?, ?)”,
-              (user_id, message_text))
+    c.execute("INSERT INTO messages (user_id, message_text) VALUES (?, ?)", (user_id, message_text))
     conn.commit()
     conn.close()
 
