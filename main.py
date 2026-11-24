@@ -1,4 +1,5 @@
 
+
 import os
 import logging
 import sqlite3
@@ -13,11 +14,21 @@ from telegram.ext import (
     ContextTypes,
     CommandHandler,
     MessageHandler,
-    AIORateLimiter,
     filters
 )
 
 DB_NAME = "bot_database.db"
+MAX_RETRIES = 5
+
+
+# Logging Setup
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
 
 
 # Database Setup
@@ -38,7 +49,8 @@ def init_db():
                 message_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
                 message_text TEXT,
-                FOREIGN KEY(user_id) REFERENCES users(user_id)
+                FOREIGN KEY(user_id)
+                    REFERENCES users(user_id)
             )
         """)
 
@@ -65,23 +77,16 @@ def save_user_and_message(user_id, username, message_text):
         conn.commit()
 
 
-# Logging
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+# Standard Retry Logic
+# No AIORateLimiter Required
+async def safe_reply(message, text):
 
-logging.getLogger("httpx").setLevel(logging.WARNING)
+    for attempt in range(MAX_RETRIES + 1):
 
-logger = logging.getLogger(__name__)
-
-
-# RetryAfter Safe Message Sender
-async def safe_reply(message, text, max_retries=5):
-
-    for attempt in range(max_retries + 1):
         try:
             await message.reply_text(text)
+
+            logger.info("Message sent successfully.")
             return True
 
         except RetryAfter as error:
@@ -93,20 +98,22 @@ async def safe_reply(message, text, max_retries=5):
 
             wait_time = float(delay) + 1
 
-            logger.warning(
-                f"Rate limit reached. "
-                f"Waiting {wait_time} seconds."
-            )
-
-            if attempt == max_retries:
+            if attempt >= MAX_RETRIES:
+                logger.error("Maximum retries reached.")
                 raise
+
+            logger.warning(
+                f"Telegram rate limit reached. "
+                f"Waiting {wait_time} seconds. "
+                f"Retry {attempt + 1}/{MAX_RETRIES}"
+            )
 
             await asyncio.sleep(wait_time)
 
     return False
 
 
-# Start Command
+# Start Handler
 async def start(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
@@ -160,15 +167,19 @@ async def error_handler(
     error = context.error
 
     if isinstance(error, RetryAfter):
-        logger.warning(
-            f"Retry limit reached: {error.retry_after}"
+        logger.error(
+            f"Unhandled rate limit: {error.retry_after}"
         )
 
     elif isinstance(error, TimedOut):
-        logger.warning("Telegram API request timed out.")
+        logger.warning(
+            "Telegram API connection timed out."
+        )
 
     elif isinstance(error, NetworkError):
-        logger.warning("Telegram network connection error.")
+        logger.warning(
+            "Network connection error."
+        )
 
     else:
         logger.error(
@@ -185,20 +196,13 @@ if __name__ == "__main__":
     TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
     if not TOKEN:
-        raise RuntimeError("Bot token is missing.")
+        raise RuntimeError(
+            "TELEGRAM_BOT_TOKEN is missing."
+        )
 
     application = (
         ApplicationBuilder()
         .token(TOKEN)
-        .rate_limiter(
-            AIORateLimiter(
-                overall_max_rate=20,
-                overall_time_period=1,
-                group_max_rate=15,
-                group_time_period=60,
-                max_retries=0
-            )
-        )
         .connect_timeout(30)
         .read_timeout(30)
         .write_timeout(30)
@@ -218,9 +222,12 @@ if __name__ == "__main__":
 
     application.add_error_handler(error_handler)
 
-    logger.info("Database initialized.")
-    logger.info("Telegram Bot starting...")
+    logger.info("Database initialized successfully.")
+    logger.info("Telegram Bot is starting...")
+    logger.info("Standard Retry Logic enabled.")
 
     application.run_polling(
-        bootstrap_retries=3
+        poll_interval=1.0,
+        bootstrap_retries=3,
+        drop_pending_updates=False
     )
