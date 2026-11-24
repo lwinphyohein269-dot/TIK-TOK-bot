@@ -9,13 +9,14 @@ def init_db():
     conn = sqlite3.connect('bot_database.db')
     c = conn.cursor()
     c.execute('''
+
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
             username TEXT
         )
     ''')
     c.execute('''
-        CREATE TABLE IF NOT EXISTS messages (
+        CREATE TABLE IF</em> NOT EXISTS messages (
             message_id INTEGER PRIMARY KEY,
             user_id INTEGER,
             message_text TEXT,
@@ -32,7 +33,7 @@ def save_user_and_message(user_id, username, message_text):
     c = conn.cursor()
     c.execute(
         "INSERT OR IGNORE INTO users VALUES (?, ?)", (user_id, username))
-    c.execute("INSERT INTO messages (user_id, message_text) VALUES (?, ?)",
+    c.execute("INSERT INTO messages (user_id, message_text) VALUES (?, ?)”,
               (user_id, message_text))
     conn.commit()
     conn.close()
@@ -41,37 +42,40 @@ def save_user_and_message(user_id, username, message_text):
 # Bot Handlers
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.INFO,
 )
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    save_user_and_message(user.id, user.username, update.message.text)
+    save_user_and_message(
+        user.id, user.username, update.message.text
+    )
     await update.message.reply_text(
-        f"မင်္ဂလာပါ {user.first_name} ! Database ထဲ မှတ်သားပြီးပါပြီ။")
+        f'မင်္ဂလာပါ {user.first_name} ! Database ထဲ မှတ်သားပြီးပါပြီ။'
+    )
 
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    save_user_and_message(user.id, user.username, update.message.text)
+    save_user_and_message(
+        user.id, user.username, update.message.text
+    )
     await update.message.reply_text(update.message.text)
 
 
 if __name__ == '__main__':
     init_db()
 
-    # Timeout Settings
-    request_kwargs = {'connect_timeout': 30, 'read_timeout': 30}
-
     # Proxy မပါဘဲ တိုက်ရိုက်ချိတ်ဆက်ခြင်း (VPN ဖွင့်ထားရန်)
-    # Timeout ပါ ထည့်သွင်းထားသည်
     application = ApplicationBuilder().token(
-        '9128977384: AAEh0kIVrqk1kN2-JbvCdUmWX5xcBBsSfeU').request_kwargs(request_kwargs).build()
+        '9128977384:AAEh0kIVrqIk1N2-JbvCdUmWx5xcBBsfeU'
+    ).build()
 
     start_handler = CommandHandler('start', start)
     echo_handler = MessageHandler(
-        filters.TEXT & (~filters.COMMAND), echo)
+        filters.TEXT & (~filters.COMMAND), echo
+    )
 
     application.add_handler(start_handler)
     application.add_handler(echo_handler)
