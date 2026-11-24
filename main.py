@@ -67,8 +67,7 @@ if __name__ == '__main__':
     # Proxy မပါဘဲ တိုက်ရိုက်ချိတ်ဆက်ခြင်း (VPN ဖွင့်ထားရန်)
     # Timeout ပါ ထည့်သွင်းထားသည်
     application = ApplicationBuilder().token(
-        '9128977384: AAEh0kIVrqk1kN2-
-JbvCdUmWX5xcBBsSfeU').request_kwargs(request_kwargs).build()
+        '9128977384: AAEh0kIVrqk1kN2-JbvCdUmWX5xcBBsSfeU').request_kwargs(request_kwargs).build()
 
     start_handler = CommandHandler('start', start)
     echo_handler = MessageHandler(
