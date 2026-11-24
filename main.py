@@ -1,82 +1,164 @@
+
+import os
 import logging
 import sqlite3
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
+from telegram import Update
+from telegram.ext import (
+    ApplicationBuilder,
+    ContextTypes,
+    CommandHandler,
+    MessageHandler,
+    filters
+)
+
+# Database Configuration
+DB_NAME = "bot_database.db"
 
 # Database Setup
 def init_db():
-    conn = sqlite3.connect('bot_database.db')
-    c = conn.cursor()
-    c.execute('''
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("PRAGMA foreign_keys = ON")
 
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            username TEXT
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF</em> NOT EXISTS messages (
-            message_id INTEGER PRIMARY KEY,
-            user_id INTEGER,
-            message_text TEXT,
-            FOREIGN KEY(user_id) REFERENCES users(user_id)
-        )
-    ''')
-    conn.commit()
-    conn.close()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                message_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                message_text TEXT,
+                FOREIGN KEY(user_id)
+                    REFERENCES users(user_id)
+            )
+        """)
+
+        conn.commit()
 
 
-# Log User and Message
+# Save User and Message
 def save_user_and_message(user_id, username, message_text):
-    conn = sqlite3.connect('bot_database.db')
-    c = conn.cursor()
-    c.execute(
-        "INSERT OR IGNORE INTO users VALUES (?, ?)", (user_id, username))
-    c.execute("INSERT INTO messages (user_id, message_text) VALUES (?, ?)", (user_id, message_text))
-    conn.commit()
-    conn.close()
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("PRAGMA foreign_keys = ON")
+
+        conn.execute("""
+            INSERT INTO users (user_id, username)
+            VALUES (?, ?)
+            ON CONFLICT(user_id)
+            DO UPDATE SET username = excluded.username
+        """, (user_id, username))
+
+        conn.execute("""
+            INSERT INTO messages (user_id, message_text)
+            VALUES (?, ?)
+        """, (user_id, message_text))
+
+        conn.commit()
 
 
-# Bot Handlers
+# Logging Setup
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
 )
 
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+logger = logging.getLogger(__name__)
+
+
+# Start Command
+async def start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     user = update.effective_user
+    message = update.effective_message
+
+    if not user or not message:
+        return
+
     save_user_and_message(
-        user.id, user.username, update.message.text
+        user.id,
+        user.username,
+        message.text
     )
-    await update.message.reply_text(
-        f'မင်္ဂလာပါ {user.first_name} ! Database ထဲ မှတ်သားပြီးပါပြီ။'
+
+    await message.reply_text(
+        f"မင်္ဂလာပါ {user.first_name}!\n"
+        "Database ထဲတွင် မှတ်တမ်းတင်ပြီးပါပြီ။"
     )
 
 
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Echo Message
+async def echo(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     user = update.effective_user
+    message = update.effective_message
+
+    if not user or not message or not message.text:
+        return
+
     save_user_and_message(
-        user.id, user.username, update.message.text
+        user.id,
+        user.username,
+        message.text
     )
-    await update.message.reply_text(update.message.text)
+
+    await message.reply_text(message.text)
 
 
-if __name__ == '__main__':
+# Error Handler
+async def error_handler(
+    update: object,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    logger.error(
+        "Bot error:",
+        exc_info=context.error
+    )
+
+
+# Run Bot
+if __name__ == "__main__":
     init_db()
 
-    # Proxy မပါဘဲ တိုက်ရိုက်ချိတ်ဆက်ခြင်း (VPN ဖွင့်ထားရန်)
-    application = ApplicationBuilder().token(
-        '9128977384:AAEh0kIVrqIk1N2-JbvCdUmWx5xcBBsfeU'
-    ).build()
+    TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-    start_handler = CommandHandler('start', start)
-    echo_handler = MessageHandler(
-        filters.TEXT & (~filters.COMMAND), echo
+    if not TOKEN:
+        raise RuntimeError(
+            "TELEGRAM_BOT_TOKEN is missing."
+        )
+
+    application = (
+        ApplicationBuilder()
+        .token(TOKEN)
+        .connect_timeout(30)
+        .read_timeout(30)
+        .write_timeout(30)
+        .build()
     )
 
-    application.add_handler(start_handler)
-    application.add_handler(echo_handler)
+    application.add_handler(
+        CommandHandler("start", start)
+    )
+
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            echo
+        )
+    )
+
+    application.add_error_handler(error_handler)
+
+    print("Database initialized successfully.")
+    print("Telegram Bot is running...")
 
     application.run_polling()
