@@ -3,9 +3,9 @@ import sqlite3
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
+
 # Database Setup
 def init_db():
-
     conn = sqlite3.connect('bot_database.db')
     c = conn.cursor()
     c.execute('''
@@ -25,6 +25,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 # Log User and Message
 def save_user_and_message(user_id, username, message_text):
     conn = sqlite3.connect('bot_database.db')
@@ -36,6 +37,7 @@ def save_user_and_message(user_id, username, message_text):
     conn.commit()
     conn.close()
 
+
 # Bot Handlers
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -46,7 +48,8 @@ logging.basicConfig(
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     save_user_and_message(user.id, user.username, update.message.text)
-    await update.message.reply_text(f"မင်္ဂလာပါ {user.first_name} ! Database ထဲ မှတ်သားပြီးပါပြီ။")
+    await update.message.reply_text(
+        f"မင်္ဂလာပါ {user.first_name} ! Database ထဲ မှတ်သားပြီးပါပြီ။")
 
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -58,9 +61,14 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == '__main__':
     init_db()
 
+    # Timeout Settings
+    request_kwargs = {'connect_timeout': 30, 'read_timeout': 30}
+
     # Proxy မပါဘဲ တိုက်ရိုက်ချိတ်ဆက်ခြင်း (VPN ဖွင့်ထားရန်)
+    # Timeout ပါ ထည့်သွင်းထားသည်
     application = ApplicationBuilder().token(
-        '9128977384:AAEhOkIVrqk1kN2-JbvCdUmWX5xcBBsSfeU').build()
+        '9128977384: AAEh0kIVrqk1kN2-
+JbvCdUmWX5xcBBsSfeU').request_kwargs(request_kwargs).build()
 
     start_handler = CommandHandler('start', start)
     echo_handler = MessageHandler(
